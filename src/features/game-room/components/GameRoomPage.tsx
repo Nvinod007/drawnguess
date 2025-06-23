@@ -1,19 +1,19 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { GameRoom } from "@/shared/types/game";
 import {
+  Avatar,
   Button,
   Card,
   CardBody,
   CardHeader,
   Chip,
-  Avatar,
-  Spacer,
-  Progress,
   Divider,
+  Progress,
+  Spacer,
 } from "@heroui/react";
-import { GameRoom } from "@/shared/types/game";
+import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
 
 interface GameRoomPageProps {
   roomCode: string;
@@ -123,6 +123,27 @@ export function GameRoomPage({ roomCode }: GameRoomPageProps) {
     fetchRoom();
   };
 
+  const cleanupDuplicates = async () => {
+    try {
+      const response = await fetch(`/api/rooms/${roomCode}/cleanup`, {
+        method: "POST",
+      });
+      const data = await response.json();
+
+      if (response.ok) {
+        alert(
+          `Cleanup complete! Removed ${data.removedCount} duplicate players.`
+        );
+        fetchRoom(); // Refresh the room
+      } else {
+        alert("Cleanup failed: " + data.error);
+      }
+    } catch (error) {
+      alert("Cleanup failed: Network error");
+      console.error("Cleanup error:", error);
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -216,6 +237,15 @@ export function GameRoomPage({ roomCode }: GameRoomPageProps) {
                 size="sm"
               >
                 Refresh
+              </Button>
+              <Button
+                onClick={cleanupDuplicates}
+                color="warning"
+                variant="bordered"
+                startContent={<span>🧹</span>}
+                size="sm"
+              >
+                Clean Duplicates
               </Button>
               <Button
                 onClick={copyRoomCode}

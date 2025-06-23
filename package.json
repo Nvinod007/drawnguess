@@ -6,7 +6,17 @@
     "dev": "next dev --turbopack",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "lint:fix": "next lint --fix",
+    "type-check": "tsc --noEmit",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "dev:safe": "npm run type-check && npm run lint && npm run dev",
+    "build:safe": "npm run type-check && npm run lint && npm run build",
+    "clean": "rm -rf .next out dist",
+    "db:push": "npx prisma db push",
+    "db:generate": "npx prisma generate",
+    "db:studio": "npx prisma studio"
   },
   "dependencies": {
     "@heroui/react": "^2.7.11",
@@ -32,9 +42,14 @@
     "@types/node": "^20.19.1",
     "@types/react": "^19",
     "@types/react-dom": "^19",
-    "eslint": "^9",
+    "@typescript-eslint/eslint-plugin": "^8.34.1",
+    "@typescript-eslint/parser": "^8.34.1",
+    "eslint": "^9.29.0",
     "eslint-config-next": "15.3.4",
+    "eslint-plugin-react": "^7.37.5",
+    "eslint-plugin-react-hooks": "^5.2.0",
+    "prettier": "^3.6.0",
     "tailwindcss": "^4.1.10",
-    "typescript": "^5"
+    "typescript": "^5.8.3"
   }
 }

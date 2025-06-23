@@ -1,8 +1,23 @@
-import { NextRequest, NextResponse } from "next/server";
+// src/app/api/rooms/route.ts
 import { prisma } from "@/lib/prisma";
 import { generateRoomCode } from "@/lib/utils";
+import { NextRequest, NextResponse } from "next/server";
 
-export async function GET() {
+interface CreateRoomBody {
+  name: string;
+  maxPlayers?: number;
+  maxRounds?: number;
+  roundTime?: number;
+}
+
+interface ApiResponse<T = unknown> {
+  success?: boolean;
+  error?: string;
+  data?: T;
+}
+
+// GET /api/rooms - Get all rooms
+export async function GET(): Promise<NextResponse> {
   try {
     const rooms = await prisma.room.findMany({
       include: {
@@ -20,20 +35,21 @@ export async function GET() {
   } catch (error) {
     console.error("Error fetching rooms:", error);
     return NextResponse.json(
-      { error: "Failed to fetch rooms" },
+      { error: "Failed to fetch rooms" } as ApiResponse,
       { status: 500 }
     );
   }
 }
 
-export async function POST(request: NextRequest) {
+// POST /api/rooms - Create new room
+export async function POST(request: NextRequest): Promise<NextResponse> {
   try {
-    const body = await request.json();
+    const body: CreateRoomBody = await request.json();
     const { name, maxPlayers = 8, maxRounds = 3, roundTime = 80 } = body;
 
-    if (!name) {
+    if (!name?.trim()) {
       return NextResponse.json(
-        { error: "Room name is required" },
+        { error: "Room name is required" } as ApiResponse,
         { status: 400 }
       );
     }
@@ -51,7 +67,7 @@ export async function POST(request: NextRequest) {
     const room = await prisma.room.create({
       data: {
         code,
-        name,
+        name: name.trim(),
         maxPlayers,
         maxRounds,
         roundTime,
@@ -65,7 +81,7 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error("Error creating room:", error);
     return NextResponse.json(
-      { error: "Failed to create room" },
+      { error: "Failed to create room" } as ApiResponse,
       { status: 500 }
     );
   }

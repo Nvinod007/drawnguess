@@ -29,12 +29,38 @@ export interface GamePlayer {
   updatedAt: Date;
 }
 
+// Drawing related types - PROPERLY TYPED
+export interface DrawPoint {
+  x: number;
+  y: number;
+  pressure?: number;
+  timestamp?: number;
+}
+
+export interface DrawPath {
+  id: string;
+  points: DrawPoint[];
+  tool: "pen" | "eraser" | "brush";
+  color: string;
+  width: number;
+  opacity?: number;
+  timestamp: number;
+}
+
+export interface DrawingPaths {
+  paths: DrawPath[];
+  canvasWidth: number;
+  canvasHeight: number;
+  version: number;
+}
+
+// FIXED: No more any types!
 export interface DrawingData {
   id: string;
   roomId: string;
   round: number;
   drawerId?: string;
-  drawData: any; // JSON drawing paths
+  drawData: DrawingPaths; // ✅ Properly typed instead of any
   word?: string;
   createdAt: Date;
 }
@@ -57,25 +83,14 @@ export interface Word {
   category: string;
 }
 
-// Drawing related types
-export interface DrawPoint {
-  x: number;
-  y: number;
-}
-
-export interface DrawPath {
-  points: DrawPoint[];
-  tool: "pen" | "eraser";
-  color: string;
-  width: number;
-}
-
 export interface CanvasState {
   paths: DrawPath[];
   isDrawing: boolean;
-  currentTool: "pen" | "eraser";
+  currentTool: "pen" | "eraser" | "brush";
   currentColor: string;
   currentWidth: number;
+  canvasWidth: number;
+  canvasHeight: number;
 }
 
 // Game state types

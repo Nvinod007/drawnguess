@@ -1,0 +1,90 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma"
+
+}
+
+datasource db {
+  provider = "mongodb"
+  url      = env("DATABASE_URL")
+}
+
+model Room {
+  id            String   @id @default(auto()) @map("_id") @db.ObjectId
+  code          String   @unique
+  name          String
+  maxPlayers    Int      @default(8)
+  status        String   @default("waiting") // waiting, playing, finished
+  currentRound  Int      @default(0)
+  maxRounds     Int      @default(3)
+  roundTime     Int      @default(80) // seconds
+  currentDrawer String?
+  currentWord   String?
+  wordOptions   String[] @default([])
+  players       Player[]
+  drawings      Drawing[]
+  messages      Message[]
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@map("rooms")
+}
+
+model Player {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  username  String
+  avatar    String?
+  roomId    String   @db.ObjectId
+  room      Room     @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  score     Int      @default(0)
+  isReady   Boolean  @default(false)
+  isDrawing Boolean  @default(false)
+  hasGuessed Boolean @default(false)
+  socketId  String?  // Track socket connection
+  joinedAt  DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("players")
+}
+
+model Drawing {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  roomId    String   @db.ObjectId
+  room      Room     @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  round     Int
+  drawerId  String?  // Player who drew this
+  drawData  Json     // Store drawing paths as JSON
+  word      String?  // The word that was drawn
+  createdAt DateTime @default(now())
+
+  @@map("drawings")
+}
+
+model Message {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  roomId    String   @db.ObjectId
+  room      Room     @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  playerId  String?  // Null for system messages
+  username  String
+  content   String
+  type      String   @default("chat") // chat, guess, system, correct
+  round     Int?
+  createdAt DateTime @default(now())
+
+  @@map("messages")
+}
+
+model Word {
+  id         String @id @default(auto()) @map("_id") @db.ObjectId
+  word       String @unique
+  difficulty String @default("medium") // easy, medium, hard
+  category   String @default("general") // animals, objects, actions, etc.
+  
+  @@map("words")
+}

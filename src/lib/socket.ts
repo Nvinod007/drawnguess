@@ -1,8 +1,8 @@
-// src/lib/socket.ts
 import { ChatMessage, DrawPath, GamePlayer } from "@/shared/types/game";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { io, Socket } from "socket.io-client";
 
-// Define only CUSTOM events (not Socket.io reserved events)
+// Define types for events emitted from the server to the client
 interface ServerToClientEvents {
   "player-joined": (player: GamePlayer) => void;
   "player-left": (playerId: string) => void;
@@ -18,6 +18,7 @@ interface ServerToClientEvents {
   "timer-update": (timeLeft: number) => void;
 }
 
+// Define types for events emitted from the client to the server
 interface ClientToServerEvents {
   "join-room": (data: { roomCode: string; username: string }) => void;
   "leave-room": (roomCode: string) => void;
@@ -29,143 +30,248 @@ interface ClientToServerEvents {
   guess: (data: { roomCode: string; guess: string }) => void;
 }
 
+// Define specific types for Socket.IO's built-in reserved events received by the client.
+// These are standard event signatures defined by the library.
+interface SocketReservedEvents {
+  connect: () => void;
+  disconnect: (reason: Socket.DisconnectReason) => void;
+  connect_error: (err: Error) => void;
+}
+
+// A union type of all possible event names the client can listen to.
+type AllEventNames = keyof ServerToClientEvents | keyof SocketReservedEvents;
+
+// A union type of all possible listener functions for both custom and reserved events.
+// This is the key to removing 'any' from the implementation signature.
+type AnyListenerFn =
+  | ServerToClientEvents[keyof ServerToClientEvents]
+  | SocketReservedEvents[keyof SocketReservedEvents];
+
 const SOCKET_URL =
   process.env.NEXT_PUBLIC_SOCKET_URL || "http://localhost:3001";
 
-class SocketManager {
-  private socket: Socket<ServerToClientEvents, ClientToServerEvents> | null =
-    null;
-  private static instance: SocketManager;
+/**
+ * A custom React hook for managing Socket.IO connection and events.
+ * Provides functions to emit events and listen for incoming events.
+ */
+export function useSocket() {
+  // Socket type correctly uses two generic parameters:
+  // ServerToClientEvents for listening, ClientToServerEvents for emitting.
+  const socketRef = useRef<Socket<
+    ServerToClientEvents,
+    ClientToServerEvents
+  > | null>(null);
+  const [isConnected, setIsConnected] = useState(false);
+  const [error, setError] = useState<Error | null>(null);
 
-  static getInstance(): SocketManager {
-    if (!SocketManager.instance) {
-      SocketManager.instance = new SocketManager();
+  useEffect(() => {
+    if (!socketRef.current || !socketRef.current.connected) {
+      const newSocket: Socket<ServerToClientEvents, ClientToServerEvents> = io(
+        SOCKET_URL,
+        {
+          autoConnect: false,
+        }
+      );
+
+      socketRef.current = newSocket;
+
+      // These internal event listeners work directly with `Socket<ServerToClientEvents, ClientToServerEvents>`
+      // because `socket.io-client` implicitly knows these are part of its own event system.
+      newSocket.on("connect", () => {
+        console.log("Connected to socket server:", newSocket.id);
+        setIsConnected(true);
+        setError(null);
+      });
+
+      newSocket.on("disconnect", (reason) => {
+        console.log("Disconnected from socket server:", reason);
+        setIsConnected(false);
+        if (reason !== "io client disconnect") {
+          setError(new Error(`Disconnected unexpectedly: ${reason}`));
+        } else {
+          setError(null);
+        }
+      });
+
+      newSocket.on("connect_error", (err) => {
+        console.error("Socket connection error:", err);
+        setError(err);
+      });
+
+      newSocket.connect();
     }
-    return SocketManager.instance;
-  }
 
-  connect(): Socket<ServerToClientEvents, ClientToServerEvents> {
-    if (this.socket?.connected) return this.socket;
+    return () => {
+      if (socketRef.current) {
+        if (socketRef.current.connected) {
+          socketRef.current.disconnect();
+        }
+        socketRef.current = null;
+      }
+    };
+  }, []);
 
-    this.socket = io(SOCKET_URL, {
-      autoConnect: false,
-    });
+  const emit = useCallback(
+    <K extends keyof ClientToServerEvents>(
+      event: K,
+      ...args: Parameters<ClientToServerEvents[K]>
+    ): void => {
+      if (socketRef.current?.connected) {
+        socketRef.current.emit(event, ...args);
+      } else {
+        console.warn("Socket not connected, cannot emit:", event);
+      }
+    },
+    []
+  );
 
-    // Handle Socket.io built-in events separately (no typing conflicts)
-    this.socket.on("connect", () => {
-      console.log("Connected to socket server:", this.socket?.id);
-    });
+  // --- Overloaded 'on' method for full type safety at the call site ---
 
-    this.socket.on("disconnect", () => {
-      console.log("Disconnected from socket server");
-    });
-
-    this.socket.on("connect_error", (error: Error) => {
-      console.error("Socket connection error:", error);
-    });
-
-    this.socket.connect();
-    return this.socket;
-  }
-
-  disconnect(): void {
-    if (this.socket) {
-      this.socket.disconnect();
-      this.socket = null;
-    }
-  }
-
-  getSocket(): Socket<ServerToClientEvents, ClientToServerEvents> | null {
-    return this.socket;
-  }
-
-  // ✅ FIXED: Simplified emit for custom events only
-  emit<K extends keyof ClientToServerEvents>(
+  // Overload 1: For all custom ServerToClientEvents
+  function on<K extends keyof ServerToClientEvents>(
     event: K,
-    data: Parameters<ClientToServerEvents[K]>[0]
-  ): void {
-    if (this.socket?.connected) {
-      this.socket.emit(event, data);
-    } else {
-      console.warn("Socket not connected, cannot emit:", event);
+    listener: ServerToClientEvents[K]
+  ): void;
+
+  // Overload 2: For 'connect' reserved event
+  function on(
+    event: "connect",
+    listener: SocketReservedEvents["connect"]
+  ): void;
+
+  // Overload 3: For 'disconnect' reserved event
+  function on(
+    event: "disconnect",
+    listener: SocketReservedEvents["disconnect"]
+  ): void;
+
+  // Overload 4: For 'connect_error' reserved event
+  function on(
+    event: "connect_error",
+    listener: SocketReservedEvents["connect_error"]
+  ): void;
+
+  // Implementation signature: This uses the exact union types to be 'any'-free.
+  function on(event: AllEventNames, listener: AnyListenerFn): void {
+    if (socketRef.current) {
+      // TypeScript can now correctly resolve this as the implementation signature's
+      // parameters precisely match the union of all possible event names and listener types.
+      socketRef.current.on(event, listener);
     }
   }
 
-  // ✅ FIXED: Simplified on for custom events only
-  on<K extends keyof ServerToClientEvents>(
+  const memoizedOn = useCallback(on, [on]);
+
+  // --- Overloaded 'off' method for full type safety at the call site ---
+
+  // Overload 1: For all custom ServerToClientEvents
+  function off<K extends keyof ServerToClientEvents>(
     event: K,
-    callback: ServerToClientEvents[K]
-  ): void {
-    if (this.socket) {
-      this.socket.on(event, callback);
+    listener?: ServerToClientEvents[K]
+  ): void;
+
+  // Overload 2: For 'connect' reserved event
+  function off(
+    event: "connect",
+    listener?: SocketReservedEvents["connect"]
+  ): void;
+
+  // Overload 3: For 'disconnect' reserved event
+  function off(
+    event: "disconnect",
+    listener?: SocketReservedEvents["disconnect"]
+  ): void;
+
+  // Overload 4: For 'connect_error' reserved event
+  function off(
+    event: "connect_error",
+    listener?: SocketReservedEvents["connect_error"]
+  ): void;
+
+  // Implementation signature for 'off'
+  function off(event: AllEventNames, listener?: AnyListenerFn): void {
+    if (socketRef.current) {
+      if (listener) {
+        socketRef.current.off(event, listener);
+      } else {
+        socketRef.current.off(event);
+      }
     }
   }
 
-  // ✅ FIXED: Simplified off for custom events only
-  off<K extends keyof ServerToClientEvents>(
-    event: K,
-    callback?: ServerToClientEvents[K]
-  ): void {
-    if (this.socket) {
-      this.socket.off(event, callback);
-    }
-  }
+  const memoizedOff = useCallback(off, [off]);
 
-  // Separate methods for Socket.io built-in events
-  onConnect(callback: () => void): void {
-    if (this.socket) {
-      this.socket.on("connect", callback);
-    }
-  }
+  // --- Specific event emitters for convenience ---
+  const joinRoom = useCallback(
+    (roomCode: string, username: string) => {
+      emit("join-room", { roomCode, username });
+    },
+    [emit]
+  );
 
-  onDisconnect(callback: () => void): void {
-    if (this.socket) {
-      this.socket.on("disconnect", callback);
-    }
-  }
+  const leaveRoom = useCallback(
+    (roomCode: string) => {
+      emit("leave-room", roomCode);
+    },
+    [emit]
+  );
 
-  onError(callback: (error: Error) => void): void {
-    if (this.socket) {
-      this.socket.on("connect_error", callback);
-    }
-  }
+  const sendDrawing = useCallback(
+    (roomCode: string, path: DrawPath) => {
+      emit("draw", { roomCode, path });
+    },
+    [emit]
+  );
 
-  // Convenience methods with proper types
-  joinRoom(roomCode: string, username: string): void {
-    this.emit("join-room", { roomCode, username });
-  }
+  const sendMessage = useCallback(
+    (roomCode: string, content: string) => {
+      emit("message", { roomCode, content });
+    },
+    [emit]
+  );
 
-  leaveRoom(roomCode: string): void {
-    this.emit("leave-room", roomCode);
-  }
+  const startGame = useCallback(
+    (roomCode: string) => {
+      emit("start-game", roomCode);
+    },
+    [emit]
+  );
 
-  sendDrawing(roomCode: string, path: DrawPath): void {
-    this.emit("draw", { roomCode, path });
-  }
+  const clearCanvas = useCallback(
+    (roomCode: string) => {
+      emit("clear-canvas", roomCode);
+    },
+    [emit]
+  );
 
-  sendMessage(roomCode: string, content: string): void {
-    this.emit("message", { roomCode, content });
-  }
+  const selectWord = useCallback(
+    (roomCode: string, word: string) => {
+      emit("select-word", { roomCode, word });
+    },
+    [emit]
+  );
 
-  startGame(roomCode: string): void {
-    this.emit("start-game", roomCode);
-  }
+  const sendGuess = useCallback(
+    (roomCode: string, guess: string) => {
+      emit("guess", { roomCode, guess });
+    },
+    [emit]
+  );
 
-  clearCanvas(roomCode: string): void {
-    this.emit("clear-canvas", roomCode);
-  }
-
-  selectWord(roomCode: string, word: string): void {
-    this.emit("select-word", { roomCode, word });
-  }
-
-  sendGuess(roomCode: string, guess: string): void {
-    this.emit("guess", { roomCode, guess });
-  }
+  return {
+    socket: socketRef.current,
+    isConnected,
+    error,
+    emit,
+    on: memoizedOn,
+    off: memoizedOff,
+    joinRoom,
+    leaveRoom,
+    sendDrawing,
+    sendMessage,
+    startGame,
+    clearCanvas,
+    selectWord,
+    sendGuess,
+  };
 }
-
-export const socketManager = SocketManager.getInstance();
-export default socketManager;
-
-// Export types for use in other files
-export type { ClientToServerEvents, ServerToClientEvents };

@@ -1,5 +1,19 @@
-import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { NextRequest, NextResponse } from "next/server";
+
+interface Player {
+  id: string;
+  username: string;
+  roomId: string;
+  joinedAt: Date;
+}
+
+interface Room {
+  id: string;
+  code: string;
+  maxPlayers: number;
+  players: Player[];
+}
 
 // POST /api/rooms/[code]/join - Join room as player
 export async function POST(
@@ -41,9 +55,8 @@ export async function POST(
       return NextResponse.json({ error: "Room is full" }, { status: 400 });
     }
 
-    // FIXED: Better duplicate username detection
-    const existingPlayer = room.players.find(
-      (player) =>
+    const existingPlayer: Player | undefined = (room as Room).players.find(
+      (player: Player) =>
         player.username.toLowerCase().trim() === trimmedUsername.toLowerCase()
     );
 

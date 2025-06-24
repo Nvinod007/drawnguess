@@ -51,5 +51,18 @@
     "prettier": "^3.6.0",
     "tailwindcss": "^4.1.10",
     "typescript": "^5.8.3"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "@heroui/shared-utils",
+      "@prisma/client",
+      "@tailwindcss/oxide",
+      "prisma"
+    ],
+    "ignoredBuiltDependencies": [
+      "@prisma/engines",
+      "sharp",
+      "unrs-resolver"
+    ]
   }
 }

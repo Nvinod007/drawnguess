@@ -11,7 +11,16 @@ interface PlayerWithId {
   joinedAt: Date;
 }
 
-// POST /api/rooms/[code]/cleanup - Remove duplicate players
+interface PlayerGroupAccumulator {
+  [username: string]: PlayerWithId[];
+}
+
+interface PlayerForGrouping {
+  id: string;
+  username: string;
+  joinedAt: Date;
+}
+
 export async function POST(
   request: NextRequest,
   { params }: { params: RouteParams }
@@ -33,26 +42,23 @@ export async function POST(
       return NextResponse.json({ error: "Room not found" }, { status: 404 });
     }
 
-    // Group players by username (case-insensitive) - FIXED: Proper typing
     const playerGroups = room.players.reduce(
-      (acc, player) => {
-        const key = player.username.toLowerCase().trim();
+      (acc: PlayerGroupAccumulator, player: PlayerForGrouping) => {
+        const key: string = player.username.toLowerCase().trim();
         if (!acc[key]) {
           acc[key] = [];
         }
         acc[key].push(player);
         return acc;
       },
-      {} as Record<string, PlayerWithId[]>
-    ); // ✅ Fixed: No more any
+      {} as PlayerGroupAccumulator
+    );
 
-    // Find duplicates and remove extras (keep the first one)
     let removedCount = 0;
     for (const [, players] of Object.entries(playerGroups)) {
-      // ✅ Fixed: Removed unused 'username'
-      if (players.length > 1) {
+      if ((players as PlayerWithId[]).length > 1) {
         // Keep the first player (oldest), remove the rest
-        const playersToRemove = players.slice(1);
+        const playersToRemove = (players as PlayerWithId[]).slice(1);
 
         for (const player of playersToRemove) {
           await prisma.player.delete({

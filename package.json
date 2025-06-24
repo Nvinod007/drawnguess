@@ -3,9 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev --turbopack",
+    "dev": "npx prisma generate && next dev --turbopack",
     "build": "npx prisma generate && next build",
-    "start": "next start",
+    "start": "npx prisma generate && next start",
     "lint": "next lint",
     "lint:fix": "next lint --fix",
     "type-check": "tsc --noEmit",

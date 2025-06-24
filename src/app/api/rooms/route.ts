@@ -1,4 +1,3 @@
-// src/app/api/rooms/route.ts
 import { prisma } from "@/lib/prisma";
 import { generateRoomCode } from "@/lib/utils";
 import { NextRequest, NextResponse } from "next/server";

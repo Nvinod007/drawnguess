@@ -20,6 +20,10 @@ export async function GET(
       include: {
         players: {
           orderBy: { joinedAt: "asc" },
+          select: {
+            id: true,
+            username: true,
+          },
         },
         _count: {
           select: { players: true },

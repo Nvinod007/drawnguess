@@ -21,7 +21,7 @@ export async function POST(
   { params }: { params: { code: string } }
 ) {
   try {
-    const { code } = params;
+    const { code } = await params;
     const body = await request.json();
     const { username } = body;
 
@@ -61,25 +61,11 @@ export async function POST(
     );
 
     if (existingPlayer) {
-      // If the same username already exists, return the existing player instead of error
-      console.log(`Username ${trimmedUsername} already exists in room ${code}`);
-
-      // Get updated room with all players
-      const updatedRoom = await prisma.room.findUnique({
-        where: { code: code.toUpperCase() },
-        include: {
-          players: {
-            orderBy: { joinedAt: "asc" },
-          },
-        },
-      });
-
-      return NextResponse.json({
-        success: true,
-        player: existingPlayer,
-        room: updatedRoom,
-        message: "Already in room",
-      });
+      // If the same username already exists, return error
+      return NextResponse.json(
+        { error: "Username already taken in this room" },
+        { status: 400 }
+      );
     }
 
     // Add player to room
